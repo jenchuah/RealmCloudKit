@@ -24,8 +24,9 @@
 
 namespace realm {
     class LinkView;
-    class Query;
+    class Results;
     class TableView;
+    struct SortOrder;
 
     namespace util {
         template<typename T> class bind_ptr;
@@ -33,91 +34,72 @@ namespace realm {
     typedef util::bind_ptr<LinkView> LinkViewRef;
 }
 
+@class RLMObjectBase;
 @class RLMObjectSchema;
+class RLMObservationInfo;
 
-struct RLMSortOrder {
-    std::vector<size_t> columnIndices;
-    std::vector<bool> ascending;
+@protocol RLMFastEnumerable
+@property (nonatomic, readonly) RLMRealm *realm;
+@property (nonatomic, readonly) RLMObjectSchema *objectSchema;
+@property (nonatomic, readonly) NSUInteger count;
 
-    explicit operator bool() const {
-        return !columnIndices.empty();
-    }
-};
+- (NSUInteger)indexInSource:(NSUInteger)index;
+- (realm::TableView)tableView;
+@end
 
-// RLMArray private properties/ivars for all subclasses
 @interface RLMArray () {
   @protected
-    // accessor ivars
-    RLMRealm *_realm;
     NSString *_objectClassName;
+  @public
+    // The name of the property which this RLMArray represents
+    NSString *_key;
+    __weak RLMObjectBase *_parentObject;
 }
-
-// initializer
-- (instancetype)initWithObjectClassName:(NSString *)objectClassName standalone:(BOOL)standalone;
 @end
 
 
 //
 // LinkView backed RLMArray subclass
 //
-@interface RLMArrayLinkView : RLMArray
-+ (instancetype)arrayWithObjectClassName:(NSString *)objectClassName
-                                    view:(realm::LinkViewRef)view
-                                   realm:(RLMRealm *)realm;
+@interface RLMArrayLinkView : RLMArray <RLMFastEnumerable>
+@property (nonatomic, unsafe_unretained) RLMObjectSchema *objectSchema;
+
++ (RLMArrayLinkView *)arrayWithObjectClassName:(NSString *)objectClassName
+                                          view:(realm::LinkViewRef)view
+                                         realm:(RLMRealm *)realm
+                                           key:(NSString *)key
+                                  parentSchema:(RLMObjectSchema *)parentSchema;
 
 // deletes all objects in the RLMArray from their containing realms
 - (void)deleteObjectsFromRealm;
 @end
 
+void RLMValidateArrayObservationKey(NSString *keyPath, RLMArray *array);
+
+// Initialize the observation info for an array if needed
+void RLMEnsureArrayObservationInfo(std::unique_ptr<RLMObservationInfo>& info, NSString *keyPath, RLMArray *array, id observed);
+
 
 //
 // RLMResults private methods
 //
-@interface RLMResults ()
-+ (instancetype)resultsWithObjectClassName:(NSString *)objectClassName
-                                     query:(std::unique_ptr<realm::Query>)query
-                                     realm:(RLMRealm *)realm;
-
-+ (instancetype)resultsWithObjectClassName:(NSString *)objectClassName
-                                     query:(std::unique_ptr<realm::Query>)query
-                                      view:(realm::TableView &&)view
-                                     realm:(RLMRealm *)realm;
-
-+ (instancetype)resultsWithObjectClassName:(NSString *)objectClassName
-                                     query:(std::unique_ptr<realm::Query>)query
-                                      sort:(RLMSortOrder)sorter
-                                     realm:(RLMRealm *)realm;
+@interface RLMResults () <RLMFastEnumerable>
++ (instancetype)resultsWithObjectSchema:(RLMObjectSchema *)objectSchema
+                                   results:(realm::Results)results;
 
 - (void)deleteObjectsFromRealm;
 @end
 
-//
-// RLMResults subclass used when a TableView can't be created - this is used
-// for readonly realms where we can't create an underlying table class for a
-// type, and we need to return a functional RLMResults instance which is always empty.
-//
-@interface RLMEmptyResults : RLMResults
-+ (instancetype)emptyResultsWithObjectClassName:(NSString *)objectClassName
-                                          realm:(RLMRealm *)realm;
-@end
+// An object which encapulates the shared logic for fast-enumerating RLMArray
+// and RLMResults, and has a buffer to store strong references to the current
+// set of enumerated items
+@interface RLMFastEnumerator : NSObject
+- (instancetype)initWithCollection:(id<RLMFastEnumerable>)collection objectSchema:(RLMObjectSchema *)objectSchema;
 
-// RLMResults backed by a realm::Table directly rather than using a TableView
-@interface RLMTableResults : RLMResults
-+ (RLMResults *)tableResultsWithObjectSchema:(RLMObjectSchema *)objectSchema realm:(RLMRealm *)realm;
-@end
+// Detach this enumerator from the source collection. Must be called before the
+// source collection is changed.
+- (void)detach;
 
-//
-// A simple holder for a C array of ids to enable autoreleasing the array without
-// the runtime overhead of a NSMutableArray
-//
-@interface RLMCArrayHolder : NSObject {
-@public
-    std::unique_ptr<id[]> array;
-    NSUInteger size;
-}
-
-- (instancetype)initWithSize:(NSUInteger)size;
-
-// Reallocate the array if it is not already the given size
-- (void)resize:(NSUInteger)size;
+- (NSUInteger)countByEnumeratingWithState:(NSFastEnumerationState *)state
+                                    count:(NSUInteger)len;
 @end

@@ -19,12 +19,15 @@
 #import "RLMUtil.hpp"
 
 #import "RLMArray_Private.hpp"
+#import "RLMListBase.h"
 #import "RLMObjectSchema_Private.hpp"
-#import "RLMObject_Private.hpp"
 #import "RLMObjectStore.h"
+#import "RLMObject_Private.hpp"
 #import "RLMProperty_Private.h"
 #import "RLMSchema_Private.h"
 #import "RLMSwiftSupport.h"
+
+#import <realm/mixed.hpp>
 
 #include <sys/sysctl.h>
 #include <sys/types.h>
@@ -105,7 +108,7 @@ static inline bool object_has_valid_type(__unsafe_unretained id const obj)
 
 BOOL RLMIsObjectValidForProperty(__unsafe_unretained id const obj,
                                  __unsafe_unretained RLMProperty *const property) {
-    if (property.optional && (!obj || obj == [NSNull null])) {
+    if (property.optional && !RLMCoerceToNil(obj)) {
         return YES;
     }
 
@@ -148,9 +151,12 @@ BOOL RLMIsObjectValidForProperty(__unsafe_unretained id const obj,
             if (RLMArray *array = RLMDynamicCast<RLMArray>(obj)) {
                 return [array.objectClassName isEqualToString:property.objectClassName];
             }
-            if (NSArray *array = RLMDynamicCast<NSArray>(obj)) {
+            if (RLMListBase *list = RLMDynamicCast<RLMListBase>(obj)) {
+                return [list._rlmArray.objectClassName isEqualToString:property.objectClassName];
+            }
+            if ([obj conformsToProtocol:@protocol(NSFastEnumeration)]) {
                 // check each element for compliance
-                for (id el in array) {
+                for (id el in (id<NSFastEnumeration>)obj) {
                     RLMObjectBase *obj = RLMDynamicCast<RLMObjectBase>(el);
                     if (!obj || ![obj->_objectSchema.className isEqualToString:property.objectClassName]) {
                         return NO;
@@ -188,16 +194,19 @@ NSDictionary *RLMDefaultValuesForObjectSchema(__unsafe_unretained RLMObjectSchem
     return defaults;
 }
 
-NSArray *RLMCollectionValueForKey(NSString *key, RLMRealm *realm, RLMObjectSchema *objectSchema, size_t count, size_t (^indexGenerator)(size_t)) {
+NSArray *RLMCollectionValueForKey(id<RLMFastEnumerable> collection, NSString *key) {
+    size_t count = collection.count;
     if (count == 0) {
         return @[];
     }
 
-    NSMutableArray *results = [NSMutableArray arrayWithCapacity:count];
+    RLMRealm *realm = collection.realm;
+    RLMObjectSchema *objectSchema = collection.objectSchema;
 
+    NSMutableArray *results = [NSMutableArray arrayWithCapacity:count];
     if ([key isEqualToString:@"self"]) {
         for (size_t i = 0; i < count; i++) {
-            size_t rowIndex = indexGenerator(i);
+            size_t rowIndex = [collection indexInSource:i];
             [results addObject:RLMCreateObjectAccessor(realm, objectSchema, rowIndex) ?: NSNull.null];
         }
         return results;
@@ -206,42 +215,47 @@ NSArray *RLMCollectionValueForKey(NSString *key, RLMRealm *realm, RLMObjectSchem
     RLMObjectBase *accessor = [[objectSchema.accessorClass alloc] initWithRealm:realm schema:objectSchema];
     realm::Table *table = objectSchema.table;
     for (size_t i = 0; i < count; i++) {
-        size_t rowIndex = indexGenerator(i);
+        size_t rowIndex = [collection indexInSource:i];
         accessor->_row = (*table)[rowIndex];
-        RLMInitializeSwiftListAccessor(accessor);
+        RLMInitializeSwiftAccessorGenerics(accessor);
         [results addObject:[accessor valueForKey:key] ?: NSNull.null];
     }
 
     return results;
 }
 
-void RLMCollectionSetValueForKey(id value, NSString *key, RLMRealm *realm, RLMObjectSchema *objectSchema, size_t count, size_t (^indexGenerator)(size_t)) {
+void RLMCollectionSetValueForKey(id<RLMFastEnumerable> collection, NSString *key, id value) {
+    size_t count = collection.count;
     if (count == 0) {
         return;
     }
+
+    RLMRealm *realm = collection.realm;
+    RLMObjectSchema *objectSchema = collection.objectSchema;
     RLMObjectBase *accessor = [[objectSchema.accessorClass alloc] initWithRealm:realm schema:objectSchema];
     realm::Table *table = objectSchema.table;
     for (size_t i = 0; i < count; i++) {
-        size_t rowIndex = indexGenerator(i);
+        size_t rowIndex = [collection indexInSource:i];
         accessor->_row = (*table)[rowIndex];
-        RLMInitializeSwiftListAccessor(accessor);
+        RLMInitializeSwiftAccessorGenerics(accessor);
         [accessor setValue:value forKey:key];
     }
 }
 
 
-NSException *RLMException(NSString *reason, NSDictionary *userInfo) {
-    NSMutableDictionary *info = [NSMutableDictionary dictionaryWithDictionary:userInfo];
-    [info addEntriesFromDictionary:@{
-                                     RLMRealmVersionKey : REALM_COCOA_VERSION,
-                                     RLMRealmCoreVersionKey : @REALM_VERSION
-                                     }];
-
-    return [NSException exceptionWithName:RLMExceptionName reason:reason userInfo:info];
+NSException *RLMException(NSString *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    NSException *e = [NSException exceptionWithName:RLMExceptionName
+                                             reason:[[NSString alloc] initWithFormat:fmt arguments:args]
+                                           userInfo:@{RLMRealmVersionKey: REALM_COCOA_VERSION,
+                                                      RLMRealmCoreVersionKey: @REALM_VERSION}];
+    va_end(args);
+    return e;
 }
 
 NSException *RLMException(std::exception const& exception) {
-    return RLMException(@(exception.what()));
+    return RLMException(@"%@", @(exception.what()));
 }
 
 NSError *RLMMakeError(RLMError code, std::exception const& exception) {
@@ -249,6 +263,29 @@ NSError *RLMMakeError(RLMError code, std::exception const& exception) {
                                code:code
                            userInfo:@{NSLocalizedDescriptionKey: @(exception.what()),
                                       @"Error Code": @(code)}];
+}
+
+NSError *RLMMakeError(RLMError code, const realm::util::File::AccessError& exception) {
+    return [NSError errorWithDomain:RLMErrorDomain
+                               code:code
+                           userInfo:@{NSLocalizedDescriptionKey: @(exception.what()),
+                                      NSFilePathErrorKey: @(exception.get_path().c_str()),
+                                      @"Error Code": @(code)}];
+}
+
+NSError *RLMMakeError(RLMError code, const realm::RealmFileException& exception) {
+    return [NSError errorWithDomain:RLMErrorDomain
+                               code:code
+                           userInfo:@{NSLocalizedDescriptionKey: @(exception.what()),
+                                      NSFilePathErrorKey: @(exception.path().c_str()),
+                                      @"Error Code": @(code)}];
+}
+
+NSError *RLMMakeError(std::system_error const& exception) {
+    return [NSError errorWithDomain:RLMErrorDomain
+                               code:exception.code().value()
+                           userInfo:@{NSLocalizedDescriptionKey: @(exception.what()),
+                                      @"Error Code": @(exception.code().value())}];
 }
 
 NSError *RLMMakeError(NSException *exception) {
@@ -262,7 +299,7 @@ void RLMSetErrorOrThrow(NSError *error, NSError **outError) {
         *outError = error;
     }
     else {
-        @throw RLMException(error.localizedDescription, error.userInfo);
+        @throw RLMException(@"%@", error.localizedDescription);
     }
 }
 
@@ -278,12 +315,6 @@ BOOL RLMIsObjectSubclass(Class klass) {
 
 BOOL RLMIsDebuggerAttached()
 {
-    // NOTE: Debugger checks are a workaround for LLDB hangs when dealing with encrypted realms (issue #1625).
-    // Skipping the checks is necessary for encryption tests to run, but can result in hangs when debugging
-    // other tests.
-    if (getenv("REALM_SKIP_DEBUGGER_CHECKS"))
-        return NO;
-
     int name[] = {
         CTL_KERN,
         KERN_PROC,
@@ -299,4 +330,45 @@ BOOL RLMIsDebuggerAttached()
     }
 
     return (info.kp_proc.p_flag & P_TRACED) != 0;
+}
+
+BOOL RLMIsInRunLoop() {
+    // The main thread may not be in a run loop yet if we're called from
+    // something like `applicationDidFinishLaunching:`, but it presumably will
+    // be in the future
+    if ([NSThread isMainThread]) {
+        return true;
+    }
+    // Current mode indicates why the current callout from the runloop was made,
+    // and is null if a runloop callout isn't currently being processed
+    if (auto mode = CFRunLoopCopyCurrentMode(CFRunLoopGetCurrent())) {
+        CFRelease(mode);
+        return true;
+    }
+    return false;
+}
+
+id RLMMixedToObjc(realm::Mixed const& mixed) {
+    switch (mixed.get_type()) {
+        case realm::type_String:
+            return RLMStringDataToNSString(mixed.get_string());
+        case realm::type_Int: {
+            return @(mixed.get_int());
+        case realm::type_Float:
+            return @(mixed.get_float());
+        case realm::type_Double:
+            return @(mixed.get_double());
+        case realm::type_Bool:
+            return @(mixed.get_bool());
+        case realm::type_DateTime:
+            return RLMDateTimeToNSDate(mixed.get_datetime());
+        case realm::type_Binary: {
+            return RLMBinaryDataToNSData(mixed.get_binary());
+        }
+        case realm::type_Link:
+        case realm::type_LinkList:
+        default:
+            @throw RLMException(@"Invalid data type for RLMPropertyTypeAny property.");
+        }
+    }
 }

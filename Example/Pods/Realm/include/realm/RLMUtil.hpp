@@ -17,21 +17,35 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #import <Realm/RLMConstants.h>
+#import <Realm/RLMOptionalBase.h>
 #import <objc/runtime.h>
 
 #import <realm/array.hpp>
 #import <realm/binary_data.hpp>
+#import <realm/datetime.hpp>
 #import <realm/string_data.hpp>
+#import <realm/util/file.hpp>
+
+namespace realm {
+    class Mixed;
+}
 
 @class RLMObjectSchema;
 @class RLMProperty;
-@class RLMRealm;
-@class RLMSchema;
+@protocol RLMFastEnumerable;
 
-NSException *RLMException(NSString *message, NSDictionary *userInfo = nil);
+namespace realm {
+    class RealmFileException;
+}
+
+__attribute__((format(NSString, 1, 2)))
+NSException *RLMException(NSString *fmt, ...);
 NSException *RLMException(std::exception const& exception);
 
 NSError *RLMMakeError(RLMError code, std::exception const& exception);
+NSError *RLMMakeError(RLMError code, const realm::util::File::AccessError&);
+NSError *RLMMakeError(RLMError code, const realm::RealmFileException&);
+NSError *RLMMakeError(std::system_error const& exception);
 NSError *RLMMakeError(NSException *exception);
 
 void RLMSetErrorOrThrow(NSError *error, NSError **outError);
@@ -43,11 +57,13 @@ BOOL RLMIsObjectValidForProperty(id obj, RLMProperty *prop);
 // merges with native property defaults if Swift class
 NSDictionary *RLMDefaultValuesForObjectSchema(RLMObjectSchema *objectSchema);
 
-NSArray *RLMCollectionValueForKey(NSString *key, RLMRealm *realm, RLMObjectSchema *objectSchema, size_t count, size_t (^indexGenerator)(size_t index));
+NSArray *RLMCollectionValueForKey(id<RLMFastEnumerable> collection, NSString *key);
 
-void RLMCollectionSetValueForKey(id value, NSString *key, RLMRealm *realm, RLMObjectSchema *objectSchema, size_t count, size_t (^indexGenerator)(size_t index));
+void RLMCollectionSetValueForKey(id<RLMFastEnumerable> collection, NSString *key, id value);
 
 BOOL RLMIsDebuggerAttached();
+
+BOOL RLMIsInRunLoop();
 
 // C version of isKindOfClass
 static inline BOOL RLMIsKindOfClass(Class class1, Class class2) {
@@ -70,9 +86,12 @@ static inline T *RLMDynamicCast(__unsafe_unretained id obj) {
 }
 
 template<typename T>
-static inline T *RLMNSNullToNil(T *obj) {
-    if (obj == NSNull.null) {
+static inline T RLMCoerceToNil(__unsafe_unretained T obj) {
+    if (static_cast<id>(obj) == NSNull.null) {
         return nil;
+    }
+    else if (__unsafe_unretained auto optional = RLMDynamicCast<RLMOptionalBase>(obj)) {
+        return RLMCoerceToNil(optional.underlyingValue);
     }
     return obj;
 }
@@ -138,6 +157,19 @@ static inline realm::BinaryData RLMBinaryDataForNSData(__unsafe_unretained NSDat
     return realm::BinaryData(bytes, data.length);
 }
 
+// Date convertion utilities
+static inline NSDate *RLMDateTimeToNSDate(realm::DateTime dateTime) {
+    auto timeInterval = static_cast<NSTimeInterval>(dateTime.get_datetime());
+    return [NSDate dateWithTimeIntervalSince1970:timeInterval];
+}
+
+static inline realm::DateTime RLMDateTimeForNSDate(__unsafe_unretained NSDate *const date) {
+    auto time = static_cast<int64_t>(date.timeIntervalSince1970);
+    return realm::DateTime(time);
+}
+
 static inline NSUInteger RLMConvertNotFound(size_t index) {
     return index == realm::not_found ? NSNotFound : index;
 }
+
+id RLMMixedToObjc(realm::Mixed const& value);

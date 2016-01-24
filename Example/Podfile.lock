@@ -1,27 +1,27 @@
 PODS:
-  - Backgroundable (0.1.5)
-  - BLLogger (0.1.1)
-  - Internet (0.2.2):
+  - Backgroundable (0.3.6.1)
+  - BLLogger (0.3.0)
+  - Internet (0.4.0):
     - ReachabilitySwift
-  - KeychainAccess (1.2.1)
-  - MultiRealm (0.3.2):
+  - KeychainAccess (2.3.3)
+  - MultiRealm (0.4.0):
     - RealmSwift
-  - ReachabilitySwift (1.1)
-  - Realm (0.94.1):
-    - Realm/Headers (= 0.94.1)
-  - Realm/Headers (0.94.1)
+  - ReachabilitySwift (2.3.3)
+  - Realm (0.97.0):
+    - Realm/Headers (= 0.97.0)
+  - Realm/Headers (0.97.0)
   - RealmCloudKit (0.1.0):
     - Internet
     - KeychainAccess
     - MultiRealm
     - SwiftFileManager
-  - RealmSwift (0.94.1):
-    - Realm (= 0.94.1)
-  - Stringer (0.4.0)
-  - SwiftFileManager (0.2.1):
-    - Backgroundable (~> 0.1)
-    - BLLogger (~> 0.1)
-    - Stringer (~> 0.1)
+  - RealmSwift (0.97.0):
+    - Realm (= 0.97.0)
+  - Stringer (0.5.2)
+  - SwiftFileManager (0.5.0):
+    - Backgroundable
+    - BLLogger
+    - Stringer
 
 DEPENDENCIES:
   - RealmCloudKit (from `../`)
@@ -31,16 +31,16 @@ EXTERNAL SOURCES:
     :path: ../
 
 SPEC CHECKSUMS:
-  Backgroundable: 76ea10f3a738100d2f7befed8626f43f0afbbab8
-  BLLogger: caf652b72f9aff961436c7606df05087314291cf
-  Internet: f7b6f7374552bdd7cfe576d5fd828e74fa3bcffd
-  KeychainAccess: 3d7922baf90762a976adb7f6030d74c1a4110a1d
-  MultiRealm: 384ae9598a524a85dd0455ba2587204cb59e469b
-  ReachabilitySwift: 1e53abddb01111deac0d229dabdb8bb043567b18
-  Realm: d999a6cf0b41577a077349c9cc9d496cc62a7d17
-  RealmCloudKit: 645bfc96cde4434b34736ea9304045b24a6260a2
-  RealmSwift: 06b60ff5b1338755654d39aab44ac38001600f76
-  Stringer: e1003277ee327723e791390bf6014a86cb4812bd
-  SwiftFileManager: dc7806f52dd613d9fcb86e1d722453c388a199e0
+  Backgroundable: 802e09c88773ac40b1b292c7ca8c5398b57cc8ef
+  BLLogger: e964e19af1a997eb4f7f14bf1a5bc444823850cd
+  Internet: 7df1869645bfe938d72189a2b7e22775924be0e4
+  KeychainAccess: 9b7e49e48277e329b1b3195e54697ed313d30acf
+  MultiRealm: 6f30d268f29f5f7ef751d6a48a9fabc3e6941fee
+  ReachabilitySwift: e0f6b6f280effb47731acfaaa2d5ffe223703793
+  Realm: b498a6fb9d288b171ff98d0e2d4384c295be8990
+  RealmCloudKit: 93ab4fa7d0f2d78f1081534ee2dd1e39f5d4e81a
+  RealmSwift: d014810dec75c9a3f1a33926d2dabfed855c582c
+  Stringer: 13fd68f2ea80e26c72658f8009766a93c3be5cd7
+  SwiftFileManager: 2649cac36700c91abf812b36c34f67b2c6534762
 
-COCOAPODS: 0.38.2
+COCOAPODS: 0.39.0

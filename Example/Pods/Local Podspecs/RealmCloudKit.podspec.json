@@ -42,12 +42,5 @@
         "RealmCloudKit/Localization/*.lproj"
       ]
     }
-  },
-  "osx": {
-    "resource_bundles": {
-      "RealmCloudKit-OSX": [
-        "RealmCloudKit/Localization/*.lproj"
-      ]
-    }
   }
 }

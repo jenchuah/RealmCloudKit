@@ -92,12 +92,12 @@ internal func getCloudAccount(options: Options, deleteBlock: ((()->())?)->(), re
     {//We have never asked
         //So we ask
         let alert = UIAlertController(title: NSLocalizedString("iCloudPreference", tableName: "RealmCloudKit", bundle: bundle, comment: "Title for the alert view that asks the user if they want to use iCloud"), message: NSLocalizedString("iCloudPreferenceDescription", tableName: "RealmCloudKit", bundle: bundle, comment: "Description for the alert view that asks the user if they want to use iCloud"), preferredStyle: .Alert)
-        alert.addAction(UIAlertAction(title: NSLocalizedString("No", tableName: "RealmCloudKit", bundle: bundle, comment: ""), style: .Cancel, handler: { (action: UIAlertAction!) -> Void in
+        alert.addAction(UIAlertAction(title: NSLocalizedString("No", tableName: "RealmCloudKit", bundle: bundle, comment: ""), style: .Cancel, handler: { (action: UIAlertAction) -> Void in
             defaults.setObject(NSNumber(bool: false), forKey: cloudKitPreferenceKey)
             defaults.synchronize()
             resultBlock(false, RealmCloudKitError.Denied.produceError())
         }))
-        alert.addAction(UIAlertAction(title: NSLocalizedString("Yes", tableName: "RealmCloudKit", bundle: bundle, comment: ""), style: .Default, handler: { (action: UIAlertAction!) -> Void in
+        alert.addAction(UIAlertAction(title: NSLocalizedString("Yes", tableName: "RealmCloudKit", bundle: bundle, comment: ""), style: .Default, handler: { (action: UIAlertAction) -> Void in
             defaults.setObject(NSNumber(bool: true), forKey: cloudKitPreferenceKey)
             defaults.synchronize()
             toBackground {
