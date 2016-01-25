@@ -8,7 +8,6 @@ import Security
 import Internet
 import ReachabilitySwift
 
-
 internal let domain = "com.bellapplab.RealmCloudKit"
 internal let bundle = NSBundle(identifier: "org.cocoapods.RealmCloudKit")!
 
@@ -21,13 +20,13 @@ public final class RealmCloudKit
         Internet.pause()
     }
     
-    private let backgroundRealm: MultiRealm
-    private let cloudKitRealm: MultiRealm
-    private var internetChange: InternetChange!
+    private var backgroundRealm: MultiRealm
+    private var cloudKitRealm: MultiRealm
+    private var internetChange: Internet.Change!
     private func setupInternetChange() {
-        self.internetChange = Internet.addChangeBlock { [unowned self] (status: Reachability.NetworkStatus) -> Void in
-            self.suspended = status == .NotReachable
-        }
+      self.internetChange = Internet.addChangeBlock { [unowned self] (status: Reachability.NetworkStatus) -> Void in
+          self.suspended = status == .NotReachable
+      }
     }
     private let options: Options
     private var suspendedCount = 0
@@ -44,7 +43,9 @@ public final class RealmCloudKit
     }
     
     private init(pathToRealmToBeSynced: String, encryptionKey: NSData?, pathToCloudKitRealm: String, options: Options) {
-        self.backgroundRealm = MultiRealm(path: pathToRealmToBeSynced, readOnly: false, encryptionKey: encryptionKey, queueType: .Background)
+      //        self.backgroundRealm = MultiRealm(path: pathToRealmToBeSynced, readOnly: false, encryptionKey: encryptionKey, queueType: .Background)
+        self.backgroundRealm = MultiRealm(.Background, {})
+        self.backgroundRealm.set(try! Realm(path: pathToRealmToBeSynced))
         self.options = options
         self.path = pathToCloudKitRealm
         
@@ -54,17 +55,19 @@ public final class RealmCloudKit
         }
         
         let keychain = Keychain(service: domain).accessibility(.WhenUnlockedThisDeviceOnly)
-        var password = keychain.getData("RealmCloudKit")
+        var password = try! keychain.getData("RealmCloudKit")
         if password == nil {
             // Generate a random encryption key
             let key = NSMutableData(length: 64)!
             SecRandomCopyBytes(kSecRandomDefault, key.length,
                 UnsafeMutablePointer<UInt8>(key.mutableBytes))
-            keychain.set(key, key: "RealmCloudKit")
+            try! keychain.set(key, key: "RealmCloudKit")
             password = key
         }
-        self.cloudKitRealm = MultiRealm(path: self.path, readOnly: false, encryptionKey: password!, queueType: .Background)
-        
+//        self.cloudKitRealm = MultiRealm(path: self.path, readOnly: false, encryptionKey: password!, queueType: .Background)
+        self.cloudKitRealm = MultiRealm(.Background, {})
+        self.cloudKitRealm.set(try! Realm(path: self.path))
+      
         self.setupInternetChange()
     }
     
@@ -76,12 +79,13 @@ public final class RealmCloudKit
         self.start(pathToRealmToBeSynced: path, encryptionKey: nil, options: nil, block: block)
     }
     
-    public class func start(var pathToRealmToBeSynced path: String?, encryptionKey: NSData?, var options: Options?, block: (resultRealm: RealmCloudKit?, error: NSError?) -> Void) {
+    public class func start(pathToRealmToBeSynced path: String?, encryptionKey: NSData?, var options: Options?, block: (resultRealm: RealmCloudKit?, error: NSError?) -> Void) {
         if options == nil {
             options = Options.forPublicContainer()
         }
         if path == nil || path!.isEmpty {
-            path = Realm.defaultPath
+            print("Realm.defaultPath?")
+//            path = Realm.defaultPath
         }
         
         let errorBlock: (NSError)->() = { (anError: NSError) -> () in
@@ -91,7 +95,7 @@ public final class RealmCloudKit
         }
         
         //Getting the Cloud Kit Realm's URL
-        NSFileManager.URLForFile(.Database, withName: path!.lastPathComponent) { (urlSuccess, cloudKitRealmURL) -> Void in
+        NSFileManager.URLForFile(.Database, withName: NSURL(fileURLWithPath: path!).lastPathComponent!) { (urlSuccess, cloudKitRealmURL) -> Void in
             if !urlSuccess {
                 errorBlock(RealmCloudKitError.Denied.produceError())
             } else {
@@ -116,7 +120,7 @@ public final class RealmCloudKit
                 }
                 else
                 {//We need an iCloud account
-                    getCloudAccount(options!, deleteBlock, { (success: Bool, error: NSError?) -> Void in
+                    getCloudAccount(options!, deleteBlock: deleteBlock, resultBlock: { (success: Bool, error: NSError?) -> Void in
                         if !success {
                             errorBlock(error!)
                         } else {
