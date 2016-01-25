@@ -27,7 +27,7 @@
 
     ],
     "SwiftFileManager": [
-
+      "~> 0.3.2"
     ],
     "KeychainAccess": [
 

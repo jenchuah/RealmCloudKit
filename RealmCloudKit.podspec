@@ -15,7 +15,7 @@ Pod::Spec.new do |s|
 
   s.frameworks = 'Foundation', 'CloudKit', 'Security'
   s.dependency 'MultiRealm'
-  s.dependency 'SwiftFileManager'
+  s.dependency 'SwiftFileManager', '~> 0.3.2'
   s.dependency 'KeychainAccess'
   s.dependency 'Internet'
 
