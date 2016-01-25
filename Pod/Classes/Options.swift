@@ -35,7 +35,7 @@ public struct Options
         return Options(access: access, permission: .ReadWrite, mergePolicy: .LocalFirst)!
     }
     
-    public init?(access: Access, permission: Permission, mergePolicy policy: MergePolicy, cloudKitContainer container: CKContainer = CKContainer.defaultContainer(), reachability: Reachability = Reachability(hostname: "api.apple-cloudkit.com"))
+    public init?(access: Access, permission: Permission, mergePolicy policy: MergePolicy, cloudKitContainer container: CKContainer = CKContainer.defaultContainer(), reachability: Reachability = try! Reachability(hostname: "api.apple-cloudkit.com"))
     {
         if access == .Private && permission == .ReadOnly {
             assertionFailure("You must not create a Cloud Access to the private database with a readonly permission.")
@@ -45,7 +45,7 @@ public struct Options
         self.access = access
         self.permission = permission
         self.mergePolicy = policy
-        Internet.start(reachability)
+        try! Internet.start(reachability)
     }
     
     internal func needCloudKitPermissions() -> Bool

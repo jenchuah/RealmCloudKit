@@ -12,7 +12,7 @@ internal func getCloudAccount(options: Options, deleteBlock: ((()->())?)->(), re
     let icloudBlock: ()->() = {
         let permissionBlock: ()->() = {
             //Ask for the user's permission
-            options.container.accountStatusWithCompletionHandler { (status: CKAccountStatus, error: NSError!) -> Void in
+            options.container.accountStatusWithCompletionHandler { (status: CKAccountStatus, error: NSError?) -> Void in
                 if status == .Available
                 {//And start the database
                     resultBlock(true, nil)
